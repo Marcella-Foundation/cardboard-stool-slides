@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Why Cardboard Works</title>
+</head>
+<body>
+
+<style>
+  :root{
+    --paper:#FBF8F3; --ink:#211A11; --kraft:#A9743B; --kraft-deep:#7C5426;
+    --fail:#C5432E; --hold:#1E7A4E; --line:#D9CDBA; --card:#F1EADD;
+    --display:"Avenir Next","Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--display);
+    overflow:hidden;
+  }
+  .deck{position:relative;width:100%;height:100vh;height:100dvh}
+  .slide{
+    position:absolute; inset:0; display:none;
+    flex-direction:column; padding:clamp(1rem,3vh,2.5rem) clamp(1.5rem,4vw,4rem);
+    gap:clamp(.6rem,1.5vh,1.2rem);
+  }
+  .slide.active{display:flex}
+
+  .kicker{
+    text-transform:uppercase; letter-spacing:.14em; font-weight:600;
+    font-size:clamp(.8rem,1.6vh,1.05rem); color:var(--kraft-deep);
+  }
+  h2{
+    font-size:clamp(2rem,6.5vh,3.8rem); font-weight:800; line-height:1.05;
+    text-wrap:balance; letter-spacing:-.01em;
+  }
+  .stage{
+    flex:1; min-height:0; display:grid;
+    grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);
+    gap:clamp(1rem,3vw,3rem); align-items:stretch;
+  }
+  figure.demo{
+    min-height:0; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; border:2px solid var(--line); border-radius:6px;
+    background:#fff; position:relative;
+  }
+  figure.demo::after{
+    content:"click to replay"; position:absolute; right:.8em; bottom:.5em;
+    font-size:clamp(.65rem,1.3vh,.85rem); letter-spacing:.08em; text-transform:uppercase;
+    color:#B9AD98; font-weight:600;
+  }
+  figure.demo svg{width:100%;height:100%;max-height:100%;display:block}
+
+  .doit{
+    align-self:center; background:var(--card); border-radius:6px;
+    padding:clamp(1rem,2.5vh,1.6rem) clamp(1rem,2vw,1.6rem);
+    border-left:6px solid var(--kraft);
+  }
+  .doit h3{
+    font-size:clamp(.85rem,1.8vh,1.1rem); text-transform:uppercase;
+    letter-spacing:.1em; color:var(--kraft-deep); margin-bottom:.6em;
+  }
+  .doit p, .doit li{
+    font-size:clamp(1rem,2.4vh,1.45rem); line-height:1.45; font-weight:500;
+  }
+  .doit ul{list-style:none; display:flex; flex-direction:column; gap:.45em}
+  .doit li{padding-left:1.2em; position:relative}
+  .doit li::before{content:"→"; position:absolute; left:0; color:var(--kraft)}
+
+  .takeaway{
+    background:var(--ink); color:var(--paper); border-radius:6px;
+    padding:clamp(.8rem,2.2vh,1.3rem) clamp(1.2rem,2.5vw,2rem);
+    font-size:clamp(1.25rem,3.4vh,2.1rem); font-weight:700; line-height:1.25;
+    text-wrap:balance;
+  }
+  .takeaway b{color:#E8B778; font-weight:800}
+
+  svg text{font-family:var(--display)}
+  .lbl{font-weight:700; font-size:15px; letter-spacing:.06em}
+  .lbl.ok{fill:var(--hold)} .lbl.bad{fill:var(--fail)}
+  .cap{font-weight:600; font-size:13px; fill:#8a7c65; letter-spacing:.04em}
+
+  /* ---------- title & closer ---------- */
+  .slide.cover{justify-content:center; align-items:flex-start; gap:2vh}
+  .cover h1{
+    font-size:clamp(3rem,11vh,7rem); font-weight:800; line-height:1.0;
+    letter-spacing:-.02em; text-wrap:balance; max-width:14ch;
+  }
+  .cover .rulebox{
+    margin-top:2vh; font-size:clamp(1.2rem,3vh,1.9rem); font-weight:600;
+    border:2px solid var(--line); border-left:6px solid var(--kraft);
+    padding:.7em 1em; border-radius:6px; background:#fff;
+  }
+  .cover .hint{color:#8a7c65; font-weight:500; font-size:clamp(.9rem,2vh,1.2rem)}
+  .flutes-banner{width:min(60vw,700px); margin-top:1vh}
+
+  .closer ul.recap{list-style:none; display:grid; grid-template-columns:1fr 1fr;
+    gap:.6em 2em; font-size:clamp(1.05rem,2.6vh,1.6rem); font-weight:600}
+  .closer ul.recap li{padding-left:1.3em; position:relative; line-height:1.3}
+  .closer ul.recap li::before{content:"■"; position:absolute; left:0; color:var(--kraft); font-size:.8em; top:.2em}
+
+  /* ---------- nav ---------- */
+  .nav{
+    position:fixed; right:clamp(1rem,3vw,2.5rem); bottom:clamp(.7rem,2vh,1.4rem);
+    display:flex; align-items:center; gap:.7em; z-index:10;
+    font-weight:700; font-size:clamp(.9rem,2vh,1.15rem); color:#8a7c65;
+    font-variant-numeric:tabular-nums;
+  }
+  .nav button{
+    font:inherit; border:2px solid var(--line); background:#fff; color:var(--ink);
+    width:2.2em; height:2.2em; border-radius:6px; cursor:pointer; font-weight:800;
+  }
+  .nav button:hover{border-color:var(--kraft)}
+  .nav button:focus-visible{outline:3px solid var(--kraft); outline-offset:2px}
+
+  /* ================= animations ================= */
+  @keyframes pressHold{ 0%,15%{transform:translateY(0)} 40%,80%{transform:translateY(6px)} 100%{transform:translateY(0)} }
+  @keyframes pressCrush{ 0%,15%{transform:translateY(0)} 45%,80%{transform:translateY(58px)} 100%{transform:translateY(0)} }
+  @keyframes crushFlat{ 0%,15%{transform:scaleY(1)} 45%,80%{transform:scaleY(.28)} 100%{transform:scaleY(1)} }
+  @keyframes squishTiny{ 0%,15%{transform:scaleY(1)} 40%,80%{transform:scaleY(.94)} 100%{transform:scaleY(1)} }
+  .anim-pressHold{animation:pressHold 3.2s ease-in-out infinite}
+  .anim-pressCrush{animation:pressCrush 3.2s ease-in-out infinite}
+  .anim-crushFlat{animation:crushFlat 3.2s ease-in-out infinite; transform-box:fill-box; transform-origin:bottom center}
+  .anim-squishTiny{animation:squishTiny 3.2s ease-in-out infinite; transform-box:fill-box; transform-origin:bottom center}
+
+  @keyframes rack{ 0%,12%{transform:skewX(0)} 45%,78%{transform:skewX(-16deg)} 100%{transform:skewX(0)} }
+  @keyframes rackNot{ 0%,12%{transform:skewX(0)} 45%,78%{transform:skewX(-1.2deg)} 100%{transform:skewX(0)} }
+  .anim-rack{animation:rack 3.2s ease-in-out infinite; transform-box:fill-box; transform-origin:bottom left}
+  .anim-rackNot{animation:rackNot 3.2s ease-in-out infinite; transform-box:fill-box; transform-origin:bottom left}
+  @keyframes pushArrow{ 0%,12%{transform:translateX(0); opacity:.25} 30%{opacity:1} 45%,78%{transform:translateX(14px); opacity:1} 100%{transform:translateX(0); opacity:.25} }
+  .anim-push{animation:pushArrow 3.2s ease-in-out infinite}
+
+  @keyframes fadePulse{ 0%,20%{opacity:0} 45%,85%{opacity:1} 100%{opacity:0} }
+  .anim-fadePulse{animation:fadePulse 3.2s ease-in-out infinite}
+
+  @keyframes spread{ 0%,25%{opacity:.15} 55%,85%{opacity:1} 100%{opacity:.15} }
+  .spread{animation:spread 3.2s ease-in-out infinite}
+
+  @keyframes ringGrow{ 0%,25%{transform:scale(.1); opacity:0} 40%{opacity:.8}
+    75%{transform:scale(1); opacity:0} 100%{opacity:0} }
+  .anim-ring{animation:ringGrow 3.2s ease-out infinite; transform-box:fill-box; transform-origin:center}
+
+  @keyframes marchDown{ to{stroke-dashoffset:-36} }
+  .anim-march{stroke-dasharray:10 8; animation:marchDown 1.1s linear infinite}
+
+  @keyframes tipOver{ 0%,18%{transform:rotate(0)} 50%,80%{transform:rotate(11deg)} 100%{transform:rotate(0)} }
+  .anim-tip{animation:tipOver 3.4s ease-in-out infinite; transform-box:fill-box; transform-origin:bottom left}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important}
+  }
+
+  /* ================= concept slides: vocabulary + evidence ================= */
+  /* Each clip has its own cream; one shared value leaves visible bands down the
+     sides of the others. Sampled from each clip's own edge pixels. */
+  #s-flutes{--letterbox:#E9D8C0}
+  #s-beam  {--letterbox:#F3DABD}
+  #s-brace {--letterbox:#F5E8D8}
+  #s-spread{--letterbox:#F7E7CE}
+  #s-buckle{--letterbox:#E7D1B9}
+  #s-glue  {--letterbox:#D8C09D}
+  #s-path  {--letterbox:#F1E1CE}
+
+  /* Must be .concept.active, not .concept: a bare .slide.concept{display:grid}
+     ties .slide.active{display:flex} on specificity and wins by order, so every
+     concept slide renders at once and the last one paints over the active one. */
+  .slide.concept{display:none}
+  .slide.concept.active{
+    display:grid; grid-template-columns:minmax(300px,34%) 1fr;
+    gap:clamp(1.2rem,3.2vw,3.2rem); align-items:center;
+    padding:clamp(1rem,3vh,2.4rem) clamp(1.4rem,3.6vw,3.4rem);
+    background:var(--paper);
+  }
+
+  /* ---- left column: the idea ---- */
+  .lede{display:flex; flex-direction:column; min-width:0}
+  .lede .kicker{margin-bottom:.5em}
+  .term{
+    font-size:clamp(2rem,6.4vh,3.6rem); font-weight:800; line-height:1;
+    letter-spacing:-.02em; text-wrap:balance;
+  }
+  .term .accent{color:var(--kraft)}
+  .def{
+    margin-top:.5em; font-size:clamp(1rem,2.5vh,1.5rem); font-weight:700;
+    line-height:1.3; color:var(--kraft-deep); text-wrap:balance;
+  }
+  .body{
+    margin-top:.85em; font-size:clamp(.82rem,1.75vh,1.02rem); line-height:1.55;
+    font-weight:500; color:#5C4E3A;
+  }
+  .watch{
+    list-style:none; margin-top:.9em; display:flex; flex-direction:column; gap:.35em;
+    font-size:clamp(.75rem,1.6vh,.94rem); font-weight:600; color:#5C4E3A;
+  }
+  .watch li{padding-left:1.1em; position:relative; line-height:1.4}
+  .watch li::before{content:"→"; position:absolute; left:0; color:var(--kraft); font-weight:800}
+  .rule{
+    margin-top:auto; padding-top:1em;
+    font-size:clamp(.86rem,1.95vh,1.1rem); font-weight:800; line-height:1.35;
+    color:var(--ink); border-top:2px solid var(--line);
+  }
+  .rule b{color:var(--kraft-deep)}
+  .rule .rlabel{
+    display:block; text-transform:uppercase; letter-spacing:.12em;
+    font-size:.62em; color:#9C8A70; margin-bottom:.35em;
+  }
+
+  /* ---- right column: the evidence ---- */
+  .stage{display:flex; flex-direction:column; gap:.7rem; min-width:0; min-height:0}
+  .stagecard{
+    position:relative; border-radius:14px; overflow:hidden;
+    background:var(--letterbox,#E9DCC4);
+    box-shadow:0 18px 44px -20px rgba(60,44,22,.55);
+    aspect-ratio:16/9; width:100%;
+  }
+  /* contain, not cover: cover trims the sides of a 1.73:1 clip, which is exactly
+     where the subjects sit. Letterbox is the clip's own cream. */
+  .stagecard video{width:100%; height:100%; display:block; object-fit:contain}
+  /* Playback progress. Several clips open on a deliberately still shot, so with no
+     indicator a playing video is indistinguishable from a frozen poster. */
+  .vprog{
+    position:absolute; left:0; right:0; bottom:0; height:3px;
+    background:rgba(33,26,17,.10); opacity:0; transition:opacity .25s;
+  }
+  .vprog.on{opacity:1}
+  .vprog i{
+    display:block; height:100%; width:0;
+    background:var(--kraft); border-radius:0 2px 2px 0;
+  }
+  .tapPlay{
+    position:absolute; inset:0; display:none; place-items:center;
+    border:0; background:rgba(33,26,17,.28); cursor:pointer; color:#fff;
+  }
+  .tapPlay.show{display:grid}
+  .tapPlay span{
+    display:grid; place-items:center; width:clamp(56px,14%,84px); aspect-ratio:1;
+    border-radius:50%; background:var(--kraft); font-size:clamp(1.3rem,3.4vw,1.9rem);
+    padding-left:.12em; box-shadow:0 8px 22px -8px rgba(0,0,0,.6);
+  }
+  .chips{display:flex; align-items:center; gap:.55rem; flex-wrap:wrap}
+  .chip{
+    display:flex; align-items:baseline; gap:.45em;
+    background:#fff; border:1px solid rgba(33,26,17,.12);
+    border-left:4px solid var(--hold); border-radius:99px;
+    padding:.4em .9em; font-size:clamp(.68rem,1.45vh,.86rem); font-weight:600; color:#5C4E3A;
+  }
+  .chip.bad{border-left-color:var(--fail)}
+  .chip b{font-weight:800; color:var(--hold); letter-spacing:.02em}
+  .chip.bad b{color:var(--fail)}
+  .dropBtn{
+    margin-left:auto; font:inherit; font-weight:800;
+    font-size:clamp(.68rem,1.45vh,.86rem);
+    background:var(--kraft); color:#fff; border:2px solid var(--kraft-deep);
+    border-radius:99px; padding:.45em 1em; cursor:pointer; white-space:nowrap;
+    transition:transform .12s;
+  }
+  .dropBtn:hover{transform:translateY(-2px)}
+  .dropBtn:active{transform:translateY(1px)}
+  .dropBtn:focus-visible{outline:3px solid var(--ink); outline-offset:2px}
+
+  /* Any portrait-ish viewport stacks, and when it stacks the reading order has to
+     be rebuilt: name the concept, define it, THEN show it, then explain it. The
+     video cannot simply lead — it would play before the thing it demonstrates has
+     a name — and it cannot simply follow, or it sits below a screenful of prose.
+     It belongs in the middle, which means .lede's children must interleave with
+     its sibling .stage. display:contents dissolves the wrapper so all of them
+     become items of the same flex/grid container and `order` can sequence them. */
+  @media (max-aspect-ratio: 13/10){
+    .slide.concept.active{grid-template-columns:1fr; align-content:start; gap:1rem}
+    .slide.concept.active .lede{display:contents}
+    .slide.concept.active .kicker{order:1}
+    .slide.concept.active .term  {order:2}
+    .slide.concept.active .def   {order:3}
+    .slide.concept.active .stage {order:4}
+    .slide.concept.active .body  {order:5}
+    .slide.concept.active .watch {order:6}
+    .slide.concept.active .rule  {order:7; margin-top:.6em}
+    /* the wrapper's gap now spaces these, so drop the stacked internal margins */
+    .slide.concept.active .term,
+    .slide.concept.active .def,
+    .slide.concept.active .body,
+    .slide.concept.active .watch{margin-top:0}
+    .slide.concept.active .kicker{margin-bottom:0}
+  }
+
+  /* ================= phones =================
+     Slides are position:absolute inset:0 inside an overflow:hidden body, so on a
+     narrow screen the content does not overflow — it is CLIPPED, with no way to
+     reach it. Every rule here exists to make a slide a scrollable column instead
+     of a fixed frame, and to put the video above the fold where it belongs. */
+  @media (max-width: 760px){
+    .slide.active,
+    .slide.concept.active{
+      /* align-items:stretch is load-bearing: the two-column rule sets
+         align-items:center to centre the pair vertically, and in a column flex
+         that same declaration centres and shrink-wraps every item horizontally. */
+      display:flex; flex-direction:column; align-items:stretch; align-content:start;
+      overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+      padding:1.1rem 1.1rem 5.5rem;      /* room for the fixed nav */
+      gap:1rem;
+    }
+    .slide.concept.active .stage{flex:0 0 auto}   /* order comes from the portrait block above */
+    .stagecard{box-shadow:0 10px 26px -14px rgba(60,44,22,.5)}
+
+    /* vh-based type collapses on a short viewport; size off the text column */
+    .term{font-size:clamp(2rem,9vw,2.9rem)}
+    .def{font-size:clamp(1rem,4.4vw,1.25rem)}
+    .body{font-size:.95rem; line-height:1.55}
+    .watch{font-size:.9rem}
+    .rule{font-size:1rem; margin-top:1em}
+    .kicker{font-size:.78rem}
+    h2{font-size:clamp(1.7rem,7.2vw,2.4rem)}
+    .takeaway{font-size:clamp(1.05rem,4.6vw,1.4rem)}
+    .doit p,.doit li{font-size:1rem}
+    .chip,.dropBtn{font-size:.76rem}
+
+    /* legacy SVG slides: one column, and give the drawing a real height.
+       flex:0 0 auto matters — the base rule is flex:1, which on a scrolling
+       column stretches .stage and leaves a dead gap above the takeaway. */
+    .stage{display:flex; flex-direction:column; gap:.9rem; flex:0 0 auto}
+    figure.demo{min-height:46vw}
+    figure.demo::after{content:none}   /* no hover on touch, and it collided with the SVG labels */
+    .cover h1{font-size:clamp(2.4rem,11vw,3.4rem)}
+    .flutes-banner{width:100%}
+    .closer ul.recap{grid-template-columns:1fr; font-size:1rem}
+
+    /* 44px minimum touch target. The nav floats over a scrolling column, so it
+       needs its own surface or it reads as garbled text on top of body copy. */
+    .nav{
+      right:1rem; bottom:1rem; gap:.5em; font-size:1rem;
+      background:rgba(250,247,241,.92); backdrop-filter:blur(6px);
+      border-radius:14px; padding:.35rem .6rem;
+      box-shadow:0 6px 20px -10px rgba(60,44,22,.5);
+    }
+    .nav button{width:44px; height:44px; border-radius:10px}
+  }
+
+  /* ================= concept 1 · legacy 2D rig (unused, kept for fallback) ================= */
+  figure.demo.rig{
+    flex-direction:column; cursor:ew-resize; padding:.6rem .6rem .2rem;
+    gap:.4rem; touch-action:none;
+  }
+  figure.demo.rig::after{content:none}
+  figure.demo.rig svg{flex:1; min-height:0}
+  .rigbar{
+    width:100%; display:flex; align-items:center; gap:.9em;
+    padding:.1rem .5rem .5rem; flex-wrap:wrap;
+  }
+  .rigbar input[type=range]{
+    flex:1; min-width:130px; accent-color:var(--kraft); cursor:pointer; height:1.5em;
+  }
+  .rigbar .preset{
+    font:inherit; font-size:clamp(.7rem,1.5vh,.86rem); font-weight:700;
+    letter-spacing:.05em; text-transform:uppercase;
+    border:2px solid var(--line); background:#fff; color:var(--ink);
+    padding:.45em .7em; border-radius:6px; cursor:pointer; white-space:nowrap;
+  }
+  .rigbar .preset:hover{border-color:var(--kraft)}
+  .rigbar .preset[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+  .rigbar .preset:focus-visible{outline:3px solid var(--kraft); outline-offset:2px}
+  .rignote{
+    width:100%; text-align:center; color:#B9AD98; font-weight:600;
+    font-size:clamp(.6rem,1.2vh,.75rem); letter-spacing:.04em; padding-bottom:.3rem;
+  }
+</style>
+
+<div class="deck" id="deck">
+
+<!-- ============ 1 · COVER ============ -->
+<section class="slide cover active" data-slug="cover">
+  <span class="kicker">Cardboard stool challenge · Structure demos</span>
+  <h1>Why Cardboard Works</h1>
+  <div class="rulebox">Score = <b>weight it holds ÷ weight of your stool</b>.<br>
+  Strong <em>and</em> light wins. These seven tricks are how.</div>
+  <svg class="flutes-banner" viewBox="0 0 700 60" aria-hidden="true">
+    <path d="M0,52 H700" stroke="var(--kraft)" stroke-width="4"></path>
+    <path d="M0,8 H700" stroke="var(--kraft)" stroke-width="4"></path>
+    <path d="M0,52 Q12,8 25,52 Q37,8 50,52 Q62,8 75,52 Q87,8 100,52 Q112,8 125,52 Q137,8 150,52 Q162,8 175,52 Q187,8 200,52 Q212,8 225,52 Q237,8 250,52 Q262,8 275,52 Q287,8 300,52 Q312,8 325,52 Q337,8 350,52 Q362,8 375,52 Q387,8 400,52 Q412,8 425,52 Q437,8 450,52 Q462,8 475,52 Q487,8 500,52 Q512,8 525,52 Q537,8 550,52 Q562,8 575,52 Q587,8 600,52 Q612,8 625,52 Q637,8 650,52 Q662,8 675,52 Q687,8 700,52" fill="none" stroke="var(--kraft)" stroke-width="3" opacity=".7"></path>
+  </svg>
+  <p class="hint">→ arrow keys or the buttons to move · click any animation to replay it</p>
+</section>
+
+<!-- ============ 2 · FLUTES (interactive rig) ============ -->
+<section class="slide concept" data-slug="1-tubes" id="s-flutes">
+  <div class="lede">
+    <span class="kicker">Concept 1</span>
+    <h2 class="term">Grain direction</h2>
+    <p class="def">Same material. Turn it sideways and it&rsquo;s a different structure.</p>
+    <p class="body">Cardboard is secretly a bundle of tiny tubes, all running the same way &mdash; that is its <b>grain</b>. Stand those tubes up and the weight runs straight down their walls to the table. Lay the same tubes on their sides and the walls have to bend instead of carry, so the block flattens. Same trick as a drinking straw: rock solid on its end, flat the moment you press its side. <i>(A material that is strong one way and weak the other is called</i> anisotropic <i>&mdash; cardboard is one of the most extreme there is.)</i></p>
+    <ul class="watch">
+        <li>Both blocks are the <b>same cardboard</b> under the <b>same weight</b>.</li>
+        <li>Nothing was added or taken away &mdash; one block was simply turned.</li>
+    </ul>
+    <p class="rule"><span class="rlabel">For your stool</span>Point the grain <b>up and down</b> in every leg and wall.</p>
+  </div>
+
+  <figure class="stage">
+    <div class="stagecard">
+      <video id="crushVid" muted playsinline preload="metadata"
+             poster="https://assets.slides.atriumtahoe.org/video/poster.png" src="https://assets.slides.atriumtahoe.org/video/crush_15s.mp4"
+             aria-label="Two identical blocks of corrugated cardboard under identical iron weights. The block whose tubes run up and down holds; the block whose tubes lie sideways is crushed flat."></video>
+    </div>
+    <figcaption class="chips">
+        <span class="chip ok">Tubes standing <b>HOLDS</b></span>
+        <span class="chip bad">Tubes lying down <b>CRUSHES</b></span>
+      <button class="dropBtn" type="button">Replay &#8635;</button>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 3 · FOLDED BEAM ============ -->
+<section class="slide concept" data-slug="2-folds" id="s-beam">
+  <div class="lede">
+    <span class="kicker">Concept 2</span>
+    <h2 class="term">Stiffness</h2>
+    <p class="def">Strength resists breaking. Stiffness resists bending &mdash; and depth is how you buy it.</p>
+    <p class="body">A flat sheet has almost no depth, so a load folds it easily. Fold that same sheet up into a channel and you move material away from its centre line, which is what actually fights bending. <i>(Engineers measure that with a number called the</i> second moment of area<i>.)</i> Stiffness climbs with the <b>cube</b> of depth: make a beam twice as deep and it becomes roughly eight times harder to bend. You paid nothing &mdash; it is the same piece of cardboard.</p>
+    <ul class="watch">
+        <li>Same strip, same weight, same span between the piers.</li>
+        <li>The only difference is that one of them has been folded.</li>
+    </ul>
+    <p class="rule"><span class="rlabel">For your stool</span>Fold flat panels into channels. <b>Depth is stiffness, for free.</b></p>
+  </div>
+
+  <figure class="stage">
+    <div class="stagecard">
+      <video id="beamVid" muted playsinline preload="metadata"
+             poster="https://assets.slides.atriumtahoe.org/video/beam_poster.png" src="https://assets.slides.atriumtahoe.org/video/beam_15s.mp4"
+             aria-label="Two identical cardboard strips bridging between piers under identical iron weights. The flat strip sags deeply; the same strip folded into a channel stays straight."></video>
+    </div>
+    <figcaption class="chips">
+        <span class="chip bad">Flat strip <b>DROOPS</b></span>
+        <span class="chip ok">Same strip, folded <b>HOLDS</b></span>
+      <button class="dropBtn" type="button">Replay &#8635;</button>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 4 · TRIANGLES ============ -->
+<section class="slide concept" data-slug="3-triangles" id="s-brace">
+  <div class="lede">
+    <span class="kicker">Concept 3</span>
+    <h2 class="term">Triangulation</h2>
+    <p class="def">A rectangle is a mechanism. A triangle is a structure.</p>
+    <p class="body">The four corners of a rectangle can hinge, so it folds over sideways into a parallelogram without a single side changing length &mdash; nothing has to stretch or break for it to collapse. Add one diagonal and every part of the frame becomes a triangle. A triangle cannot change its shape unless one of its sides actually gets longer or shorter, so it locks.</p>
+    <ul class="watch">
+        <li>Watch the top rail stay perfectly level all the way down &mdash; it never tips.</li>
+        <li>No side ever changes length. The rectangle folds flat anyway.</li>
+        <li>The braced frame never moves at all.</li>
+    </ul>
+    <p class="rule"><span class="rlabel">For your stool</span><b>Brace every open rectangle</b> with a diagonal.</p>
+  </div>
+
+  <figure class="stage">
+    <div class="stagecard">
+      <video id="braceVid" muted playsinline preload="metadata"
+             poster="https://assets.slides.atriumtahoe.org/video/brace_poster.png" src="https://assets.slides.atriumtahoe.org/video/brace_15s.mp4"
+             aria-label="Two identical cardboard square frames under identical iron weights. The plain frame folds over into a leaning parallelogram; the frame with one diagonal brace stays square."></video>
+    </div>
+    <figcaption class="chips">
+        <span class="chip bad">Plain rectangle <b>FOLDS FLAT</b></span>
+        <span class="chip ok">One diagonal added <b>STAYS SQUARE</b></span>
+      <button class="dropBtn" type="button">Replay &#8635;</button>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 5 · WOVEN SEAT ============ -->
+<section class="slide concept" data-slug="4-spread" id="s-spread">
+  <div class="lede">
+    <span class="kicker">Concept 4</span>
+    <h2 class="term">Redundancy</h2>
+    <p class="def">One strip alone takes everything. Woven together, they all take a share.</p>
+    <p class="body">Press one spot on a single sheet and that spot takes all of it &mdash; until the board creases and gives way. A woven mat is <b>two layers thick everywhere the strips cross</b>, and it spans in both directions at once, so pushing on one strip drags all of its neighbours in with it. The same push becomes a small share for every strip. In engineering that is <b>redundancy</b>: not wasted material, but many routes to the ground instead of one. It is the opposite of what the word means in everyday speech &mdash; here it is exactly what keeps you safe, and it is how a chair seat works.</p>
+    <ul class="watch">
+      <li>Same cardboard, same weight, same size opening.</li>
+      <li>Watch the flat sheet <b>crease</b> &mdash; the load found one spot.</li>
+    </ul>
+    <p class="rule"><span class="rlabel">For your stool</span>Weave or grid the seat so <b>every strip takes a share</b>.</p>
+  </div>
+
+  <figure class="stage">
+    <div class="stagecard">
+      <video id="spreadVid" muted playsinline preload="metadata"
+             poster="https://assets.slides.atriumtahoe.org/video/spread_poster.png" src="https://assets.slides.atriumtahoe.org/video/spread_15s.mp4"
+             aria-label="Two identical open boxes under identical iron weights. A single flat cardboard sheet creases and caves into the box; a woven mat of strips across the same opening barely moves."></video>
+    </div>
+    <figcaption class="chips">
+      <span class="chip bad">One flat sheet <b>CAVES IN</b></span>
+      <span class="chip ok">Woven strips <b>HOLD</b></span>
+      <button class="dropBtn" type="button">Replay &#8635;</button>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 6 · TUBES ============ -->
+<section class="slide concept" data-slug="5-buckling" id="s-buckle">
+  <div class="lede">
+    <span class="kicker">Concept 5</span>
+    <h2 class="term">Buckling</h2>
+    <p class="def">A column doesn&rsquo;t fail by being crushed. It fails by going sideways.</p>
+    <p class="body">A long thin column almost never runs out of material strength &mdash; it runs out of <b>stability</b>. Past a certain load it becomes easier for the column to bow sideways than to stay straight, and once it starts it cannot stop. What sets that load is <b>shape, not amount</b>: a flat strip has one direction it is easy to bend, so it picks it. Roll that same sheet into a tube and there is no weak direction left to pick.</p>
+    <ul class="watch">
+        <li>Same cardboard, same weight, same height &mdash; only the cross-section differs.</li>
+        <li>The strip creases. Cardboard folds; it never stretches.</li>
+        <li>Nothing keeps that weight level once its column folds.</li>
+    </ul>
+    <p class="rule"><span class="rlabel">For your stool</span><b>Roll your legs into tubes.</b> Shape beats thickness.</p>
+  </div>
+
+  <figure class="stage">
+    <div class="stagecard">
+      <video id="buckleVid" muted playsinline preload="metadata"
+             poster="https://assets.slides.atriumtahoe.org/video/buckle_poster.png" src="https://assets.slides.atriumtahoe.org/video/buckle_15s.mp4"
+             aria-label="Two identical cardboard columns of the same height under identical iron weights. The flat strip bows sideways and creases; the same sheet rolled into a tube stands unchanged."></video>
+    </div>
+    <div class="chips">
+      <span class="chip bad">Flat strip <b>BUCKLES</b></span>
+      <span class="chip">Same sheet, rolled <b>STANDS</b></span>
+      <button class="dropBtn" type="button">Replay &#8635;</button>
+    </div>
+  </figure>
+</section>
+
+<!-- ============ 7 · LAMINATION ============ -->
+<section class="slide concept" data-slug="6-glue" id="s-glue">
+  <div class="lede">
+    <span class="kicker">Concept 6</span>
+    <h2 class="term">Lamination</h2>
+    <p class="def">Loose layers slide. Glued layers can&rsquo;t &mdash; so they act as one thick board.</p>
+    <p class="body">Stack three strips and bend them: each one bends on its own, and their ends <b>slide past each other</b> like a fanned deck of cards. You have three thin beams, not one thick one. Glue stops that sliding, and the instant it does the three layers have to bend as a single deep board. Glue&rsquo;s real job is not holding pieces together &mdash; it is <b>stopping the slip</b>. And since stiffness goes with the <b>cube</b> of depth, refusing to slip is worth far more than the glue weighs.</p>
+    <ul class="watch">
+        <li>Watch the ends of the loose stack step out of line as it sags.</li>
+        <li>The glued beam&rsquo;s layers stay perfectly flush.</li>
+        <li>Same three strips, same weight, same span.</li>
+    </ul>
+    <p class="rule"><span class="rlabel">For your stool</span><b>Glue every layer face to face</b> &mdash; and cross the grain, like plywood.</p>
+  </div>
+
+  <figure class="stage">
+    <div class="stagecard">
+      <video id="glueVid" muted playsinline preload="metadata"
+             poster="https://assets.slides.atriumtahoe.org/video/glue_poster.png" src="https://assets.slides.atriumtahoe.org/video/glue_15s.mp4"
+             aria-label="Two identical three-layer cardboard beams under identical iron weights. The unglued stack sags and its layers slide out of alignment at the ends; the glued stack stays flat."></video>
+    </div>
+    <div class="chips">
+      <span class="chip bad">Loose layers <b>SLIDE</b></span>
+      <span class="chip">Glued layers <b>HOLD</b></span>
+      <button class="dropBtn" type="button">Replay &#8635;</button>
+    </div>
+  </figure>
+</section>
+
+<!-- ============ 8 · LOAD PATH ============ -->
+<section class="slide concept" data-slug="7-load-path" id="s-path">
+  <div class="lede">
+    <span class="kicker">Concept 7</span>
+    <h2 class="term">Load path</h2>
+    <p class="def">Weight needs a straight road to the ground.</p>
+    <p class="body">Every force you put on a structure has to travel somewhere &mdash; through the parts and down to the floor. That route is the <b>load path</b>. Put a leg directly under the load and the force drops straight down the tube; the seat hardly knows it is there. Move the legs out to the ends and the force has nowhere to go but <b>sideways through the seat first</b>, bending it the whole way, before it can find a leg. Same seat, same weight, same cardboard &mdash; <b>nothing got weaker. Only the path got longer.</b></p>
+    <ul class="watch">
+        <li>Identical stools, identical weights, both loads dead centre.</li>
+        <li>The only difference is where the legs are.</li>
+        <li>Neither one tips &mdash; the right one fails by <b>bending</b>.</li>
+    </ul>
+    <p class="rule"><span class="rlabel">For your stool</span><b>Put legs directly under where you sit</b> &mdash; including when you lean back.</p>
+  </div>
+
+  <figure class="stage">
+    <div class="stagecard">
+      <video id="pathVid" muted playsinline preload="metadata"
+             poster="https://assets.slides.atriumtahoe.org/video/path2_poster.png" src="https://assets.slides.atriumtahoe.org/video/path2_15s.mp4"
+             aria-label="Two identical cardboard stools under identical weights. The stool whose legs sit directly under the load holds flat; the stool whose legs are out at the ends sags and folds in the middle."></video>
+    </div>
+    <div class="chips">
+      <span class="chip">Leg under the load <b>SOLID</b></span>
+      <span class="chip bad">No leg under the load <b>SAGS</b></span>
+      <button class="dropBtn" type="button">Replay &#8635;</button>
+    </div>
+  </figure>
+</section>
+
+<!-- ============ 9 · CLOSER ============ -->
+<section class="slide cover closer" data-slug="recap">
+  <span class="kicker">Now build</span>
+  <h1 style="max-width:18ch">Strong ÷ light. Every gram must earn its place.</h1>
+  <ul class="recap">
+    <li>Grain vertical in every leg</li>
+    <li>Fold flat panels into channels</li>
+    <li>Brace every rectangle with a diagonal</li>
+    <li>Weave or grid the seat so every strip shares</li>
+    <li>Tubes beat flat legs — buckling is the enemy</li>
+    <li>Glue laminations; loose layers don't count</li>
+    <li>Legs go under the sitter, not near the sitter</li>
+  </ul>
+  <div class="rulebox">Before you cut: trace where <b>your weight travels to the floor</b>. If the path bends, so will your stool.</div>
+</section>
+
+</div>
+
+<div class="nav" aria-label="Slide navigation">
+  <button id="prev" aria-label="Previous slide">‹</button>
+  <span id="counter">1 / 9</span>
+  <button id="next" aria-label="Next slide">›</button>
+</div>
+
+<!-- ===== video slides: play on entry, pause on exit, replay on demand ===== -->
+<script>
+(function(){
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var blocked = [];      // slides whose autoplay the browser refused
+
+  document.querySelectorAll('.slide.concept').forEach(function(slide){
+    var vid = slide.querySelector('video');
+    var btn = slide.querySelector('.dropBtn');
+    if (!vid) return;
+
+    // Autoplay is muted + playsinline, which passes almost everywhere — but iOS
+    // Low Power Mode and Android data-saver refuse it outright, and a silent
+    // refusal leaves a dead poster with no affordance.
+    var tap = document.createElement('button');
+    tap.type = 'button';
+    tap.className = 'tapPlay';
+    tap.setAttribute('aria-label', 'Play the demonstration');
+    tap.innerHTML = '<span>&#9654;</span>';
+    slide.querySelector('.stagecard').appendChild(tap);
+
+    var prog = document.createElement('div');
+    prog.className = 'vprog';
+    prog.innerHTML = '<i></i>';
+    var bar = prog.firstChild;
+    slide.querySelector('.stagecard').appendChild(prog);
+
+    // rAF, not timeupdate: timeupdate fires roughly four times a second, which
+    // reads as a stuttering bar rather than steady motion.
+    var raf = null;
+    function tick(){
+      if (vid.duration) bar.style.width = (vid.currentTime / vid.duration * 100) + '%';
+      raf = vid.paused ? null : requestAnimationFrame(tick);
+    }
+    function startBar(){
+      prog.classList.add('on');
+      if (raf === null) raf = requestAnimationFrame(tick);
+    }
+    vid.addEventListener('play', startBar);
+    vid.addEventListener('ended', function(){ bar.style.width = '100%'; });
+
+    function playFromStart(){
+      if (reduced) return;               // hold the poster instead
+      // Seeking before metadata lands is a no-op on iOS, so rewind on whichever
+      // of the two comes second rather than assuming the element is ready.
+      if (vid.readyState >= 1) { try { vid.currentTime = 0; } catch (e) {} }
+      else vid.addEventListener('loadedmetadata', function(){ try { vid.currentTime = 0; } catch (e) {} }, { once: true });
+
+      bar.style.width = '0%';
+      var p = vid.play();
+      if (p && p.then) {
+        p.then(function(){ tap.classList.remove('show'); })
+         .catch(function(){
+           // AbortError just means a newer play/pause superseded this one.
+           if (vid.paused) { tap.classList.add('show'); if (blocked.indexOf(playFromStart) < 0) blocked.push(playFromStart); }
+         });
+      }
+    }
+
+    // show() calls this synchronously, inside the tap's own call stack, which is
+    // what Safari actually checks for user activation. The observer is only a
+    // backstop for class changes that do not come through show().
+    slide._play = playFromStart;
+    slide._stop = function(){ vid.pause(); };
+
+    tap.addEventListener('click', function(e){ e.stopPropagation(); playFromStart(); });
+    if (btn) btn.addEventListener('click', playFromStart);
+
+    new MutationObserver(function(){
+      if (slide.classList.contains('active')) { if (vid.paused) playFromStart(); }
+      else vid.pause();
+    }).observe(slide, { attributes: true, attributeFilter: ['class'] });
+
+    if (slide.classList.contains('active')) playFromStart();
+  });
+
+  // ONE listener, not one per slide. Four listeners sharing a single flag meant
+  // the first to fire consumed it on behalf of a slide that was not on screen,
+  // and the rest never ran — the retry silently did nothing.
+  ['touchstart','pointerdown','click'].forEach(function(evt){
+    document.addEventListener(evt, function(){
+      if (!blocked.length) return;
+      var active = document.querySelector('.slide.concept.active');
+      if (active && active._play) active._play();
+      blocked.length = 0;
+    }, { passive: true, capture: true });
+  });
+})();
+</script>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var counter = document.getElementById('counter');
+
+  var slugs = slides.map(function(s, n){ return s.dataset.slug || String(n + 1); });
+  var syncing = false;   // guards the show -> hash -> hashchange -> show loop
+
+  function show(n, fromHash){
+    n = Math.max(0, Math.min(slides.length - 1, n));
+    var prev = slides[i];
+    slides[i].classList.remove('active');
+    i = n;
+    slides[i].classList.add('active');
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    replay(slides[i]);
+    // synchronous, so the browser still sees this as inside the user gesture
+    if (prev && prev._stop) prev._stop();
+    if (slides[i]._play) slides[i]._play();
+    if (!fromHash) {
+      syncing = true;
+      location.hash = slugs[i];        // history entry per slide: back/forward walks the deck
+      syncing = false;
+    }
+  }
+
+  // Accept either a slug (#3-triangles) or a 1-based number (#4).
+  function indexFromHash(){
+    var raw = decodeURIComponent((location.hash || '').replace(/^#\/?/, '')).trim();
+    if (!raw) return 0;
+    var bySlug = slugs.indexOf(raw);
+    if (bySlug !== -1) return bySlug;
+    var n = parseInt(raw, 10);
+    return isNaN(n) ? 0 : Math.max(0, Math.min(slides.length - 1, n - 1));
+  }
+
+  window.addEventListener('hashchange', function(){
+    if (syncing) return;
+    show(indexFromHash(), true);
+  });
+  // Restart CSS + SMIL animations by re-parsing the figure's SVG.
+  // Interactive rigs are skipped — re-parsing would destroy their state and listeners.
+  function replay(slide){
+    slide.querySelectorAll('figure.demo:not([data-interactive])').forEach(function(f){
+      f.innerHTML = f.innerHTML;
+    });
+  }
+
+  // Honour a deep link on load; the cover already carries .active in markup.
+  (function(){
+    var start = indexFromHash();
+    if (start !== 0) show(start, true);
+    if (!location.hash) { syncing = true; location.replace('#' + slugs[0]); syncing = false; }
+  })();
+
+  document.getElementById('prev').addEventListener('click', function(){ show(i - 1); });
+  document.getElementById('next').addEventListener('click', function(){ show(i + 1); });
+
+  // Horizontal swipe pages the deck. Slides scroll vertically on phones, so the
+  // gesture only counts when it is decisively horizontal — otherwise flicking
+  // through the body copy would fire a page turn.
+  (function(){
+    var x0 = null, y0 = null;
+    document.addEventListener('touchstart', function(e){
+      if (e.touches.length !== 1) { x0 = null; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', function(e){
+      if (x0 === null) return;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - x0, dy = t.clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+      show(dx < 0 ? i + 1 : i - 1);
+    }, { passive: true });
+  })();
+
+  document.addEventListener('keydown', function(e){
+    // Text/range controls own their keys outright. Buttons only swallow their
+    // activation keys, so arrows still page the deck after you click one.
+    var t = e.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    if (tag === 'BUTTON' && !(t.closest && t.closest('.nav')) &&
+        (e.key === ' ' || e.key === 'Enter')) return;
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(slides.length - 1); }
+  });
+
+  // Click a demo to replay just that animation
+  document.querySelectorAll('figure.demo:not([data-interactive])').forEach(function(f){
+    f.addEventListener('click', function(e){
+      e.stopPropagation();
+      f.innerHTML = f.innerHTML;
+    });
+  });
+  // Re-bind after innerHTML swaps is unnecessary: listener is on the figure itself.
+
+  // Reduced motion: freeze SMIL at rest state
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll('animate, animateTransform').forEach(function(a){ a.remove(); });
+  }
+})();
+</script>
+</body>
+</html>
